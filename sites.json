@@ -1,0 +1,11 @@
+{
+    "GitHub": {
+        "url": "https://github.com/{}",
+        "errorType": "status_code"
+    },
+    "Reddit": {
+        "url": "https://www.reddit.com/user/{}",
+        "errorType": "message",
+        "errorMsg": "Sorry, nobody on Reddit goes by that name."
+    }
+}

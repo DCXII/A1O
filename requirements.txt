@@ -1,0 +1,8 @@
+requests[socks]
+dnspython
+python-whois
+beautifulsoup4
+Pillow
+robotexclusionrulesparser
+selenium
+webdriver-manager
