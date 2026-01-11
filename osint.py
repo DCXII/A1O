@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ULTIMA - The Ultimate OSINT Intelligence Entity
+A1OSINT - The Ultimate OSINT Intelligence Entity
 Professional-grade autonomous intelligence gathering with built-in data libraries.
 """
 
@@ -875,7 +875,7 @@ class DeepProfileHunter:
             
         return data
 
-class ULTIMA:
+class A1OSINT:
     """The professional intelligence entity"""
     def __init__(self, verbose=False, max_depth=2, proxy=None, browser='chrome'):
         self.verbose = verbose
@@ -919,7 +919,7 @@ class ULTIMA:
             return
         colors = {'info': Colors.OKBLUE, 'success': Colors.OKGREEN, 'warning': Colors.WARNING, 'error': Colors.FAIL}
         timestamp = datetime.now().strftime('%H:%M:%S')
-        print(f"[{timestamp}] {colors.get(level, '')}[ULTIMA] {message}{Colors.ENDC}")
+        print(f"[{timestamp}] {colors.get(level, '')}[A1OSINT] {message}{Colors.ENDC}")
     
     def _init_browser(self):
         if not SELENIUM_AVAILABLE or self.driver:
@@ -1759,7 +1759,7 @@ def get_consent(no_consent_flag):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='ULTIMA - Professional OSINT Intelligence Platform',
+        description='A1OSINT - Professional OSINT Intelligence Platform',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Professional-grade intelligence gathering with relevance filtering and data libraries.
@@ -1807,8 +1807,8 @@ Features:
         print(f"{Colors.FAIL}ERROR: sites.json not found{Colors.ENDC}")
         sys.exit(1)
     
-    # Initialize ULTIMA
-    ultima = ULTIMA(
+    # Initialize A1OSINT
+    A1OSINT = A1OSINT(
         verbose=args.verbose,
         max_depth=args.depth,
         proxy=args.proxy,
@@ -1816,7 +1816,7 @@ Features:
     )
     
     try:
-        nodes, statistics = ultima.start(args.type, args.value)
+        nodes, statistics = A1OSINT.start(args.type, args.value)
         
         # Display report
         report = format_professional_report(nodes, statistics)
