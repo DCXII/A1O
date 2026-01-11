@@ -55,7 +55,6 @@ python osint.py <type> <value> [options]
 *   `--proxy`: Use a proxy (e.g., `http://host:port`).
 *   `--browser`: Browser to use for deep analysis (`chrome` or `firefox`, default: `chrome`).
 *   `--no-banner`: Hide the banner.
-*   `--no-consent`: Skip the consent prompt.
 
 **Examples:**
 
