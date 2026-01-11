@@ -55,6 +55,7 @@ python osint.py <type> <value> [options]
 *   `--proxy`: Use a proxy (e.g., `http://host:port`).
 *   `--browser`: Browser to use for deep analysis (`chrome` or `firefox`, default: `chrome`).
 *   `--no-banner`: Hide the banner.
+*   `--no-consent`: Skip the consent prompt.
 
 **Examples:**
 
@@ -94,6 +95,10 @@ The following Python libraries are required:
 *   webdriver-manager
 
 All dependencies are listed in the `requirements.txt` file.
+
+## Disclaimer
+
+This tool is intended for legal and ethical purposes only. Before running a search, you will be prompted to agree to a legal disclaimer. The developer is not responsible for any illegal usage of this tool.
 
 ## License
 

@@ -1736,6 +1736,27 @@ def format_professional_report(nodes, statistics):
     
     return '\n'.join(output)
 
+def get_consent(no_consent_flag):
+    """
+    Prompts the user for consent and returns True if they agree, False otherwise.
+    """
+    if no_consent_flag:
+        return True
+        
+    print(f"{Colors.WARNING}LEGAL DISCLAIMER:{Colors.ENDC}")
+    print("This tool is intended for legal and ethical purposes only.")
+    print("The developer is not responsible for any illegal usage of this tool.")
+    print("By using this tool, you agree to use it in a lawful manner and take full responsibility for your actions.")
+    
+    while True:
+        choice = input("Do you agree to these terms? (yes/no): ").lower().strip()
+        if choice in ['yes', 'y']:
+            return True
+        elif choice in ['no', 'n']:
+            return False
+        else:
+            print("Invalid input. Please enter 'yes' or 'no'.")
+
 def main():
     parser = argparse.ArgumentParser(
         description='ULTIMA - Professional OSINT Intelligence Platform',
@@ -1770,8 +1791,13 @@ Features:
     parser.add_argument('--browser', choices=['chrome', 'firefox'], default='chrome',
                         help='Browser for deep analysis')
     parser.add_argument('--no-banner', action='store_true', help='Hide banner')
-    
+    parser.add_argument('--no-consent', action='store_true', help='Skip consent prompt')
+
     args = parser.parse_args()
+
+    if not get_consent(args.no_consent):
+        print(f"{Colors.FAIL}You must agree to the terms to use this tool.{Colors.ENDC}")
+        sys.exit(1)
     
     if not args.no_banner:
         print_banner()
