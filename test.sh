@@ -1,7 +1,7 @@
 #!/bin/bash
-# ULTIMA OSINT Tool - Quick Test Script
+# A1OSINT Tool - Quick Test Script
 
-echo "🔍 ULTIMA OSINT Tool - Quick Test Suite"
+echo "🔍 A1OSINT Tool - Quick Test Suite"
 echo "========================================"
 echo ""
 
@@ -101,7 +101,7 @@ echo ""
 
 echo "✨ All basic tests passed!"
 echo ""
-echo "Ready to use ULTIMA OSINT Tool"
+echo "Ready to use A1OSINT Tool"
 echo ""
 echo "Example commands:"
 echo "  python3 osint.py username johndoe -v"
