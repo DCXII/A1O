@@ -903,4 +903,4 @@ class ULTIMA:
         self.patterns = {
             'email': re.compile(r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'),
             'phone': re.compile(r'[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,4}[-\s.]?[0-9]{1,9}'),
-            'url': re.compile(r'https?://[^\s<>
+            'url': re.compile(r'https?://[^\s<>"{}|\\^\[\]]+'),
