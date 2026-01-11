@@ -906,3 +906,4 @@ class ULTIMA:
             'url': re.compile(r'https?://[^\s<>"{}|\\^\[\]]+'),
             'username': re.compile(r'@([a-zA-Z0-9_]{3,15})\b')
         }
+        }
