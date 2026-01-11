@@ -1807,8 +1807,8 @@ Features:
         print(f"{Colors.FAIL}ERROR: sites.json not found{Colors.ENDC}")
         sys.exit(1)
     
-    # Initialize A1OSINT
-    A1OSINT = A1OSINT(
+    # Initialize ULTIMA
+    ultima = ULTIMA(
         verbose=args.verbose,
         max_depth=args.depth,
         proxy=args.proxy,
