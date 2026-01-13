@@ -98,7 +98,3 @@ All dependencies are listed in the `requirements.txt` file.
 ## Disclaimer
 
 This tool is intended for legal and ethical purposes only. Before running a search, you will be prompted to agree to a legal disclaimer. The developer is not responsible for any illegal usage of this tool.
-
-## License
-
-This project is currently unlicensed. You are free to use, modify, and distribute it as you see fit. However, a formal license may be added in the future.
