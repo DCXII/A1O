@@ -12,6 +12,7 @@ import requests
 import re
 import dns.resolver
 import whois
+import configparser
 from datetime import datetime
 from urllib.parse import quote, urlparse, urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,6 +20,7 @@ import time
 from pathlib import Path
 import hashlib
 from collections import deque
+from ai_brain import AIBrain
 
 try:
     from selenium import webdriver
@@ -50,7 +52,7 @@ def print_banner():
     banner = f"""{Colors.OKCYAN}
     ╔════════════════════════════════════════════════════╗
     ║                                                    ║
-    ║  █████╗  ██╗ ██████╗ ███████╗██╗███╗   ██╗████████║
+    ║  █████╗  ██╗ ██████╗ ███████╗██╗███╗   ██╗████████║║
     ║ ██╔══██╗███║██╔═══██╗██╔════╝██║████╗  ██║╚══██╔══╝║
     ║ ███████║╚██║██║   ██║███████╗██║██╔██╗ ██║   ██║   ║ 
     ║ ██╔══██║ ██║██║   ██║╚════██║██║██║╚██╗██║   ██║   ║ 
@@ -763,15 +765,25 @@ class DeepProfileHunter:
 
 class A1OSINT: # Renamed from ULTIMA to A1OSINT
     """The professional intelligence entity"""
-    def __init__(self, verbose=False, max_depth=2, proxy=None, browser='chrome'):
+    def __init__(self, verbose=False, max_depth=2, proxy=None, browser='chrome', use_ai=False, ai_backend='auto'):
         self.verbose = verbose
         self.max_depth = max_depth
         self.proxy = proxy
         self.browser_type = browser
+        self.use_ai = use_ai
+        self.api_keys = self._load_config()
         self.store = IntelligenceStore(verbose)
         self.library = IntelLibrary(verbose)
         self.driver = None
         self.hunter = None
+        # AI Brain
+        self.ai_brain = None
+        if self.use_ai:
+            gemini_key = self.api_keys.get('gemini_api_key')
+            self.ai_brain = AIBrain(api_key=gemini_key, backend=ai_backend, verbose=verbose)
+            if not self.ai_brain.enabled:
+                self.log("AI Brain not available - falling back to standard mode", 'warning')
+                self.ai_brain = None
         # Session
         self.session = requests.Session()
         self.session.headers.update({
@@ -795,6 +807,23 @@ class A1OSINT: # Renamed from ULTIMA to A1OSINT
                 return json.load(f)
         except:
             return {}
+
+    def _load_config(self, config_path='config.ini'):
+        """Load API keys from config.ini"""
+        config = configparser.ConfigParser()
+        keys = {}
+        try:
+            if Path(config_path).exists():
+                config.read(config_path)
+                if 'api_keys' in config:
+                    for key in config['api_keys']:
+                        val = config['api_keys'][key]
+                        if val and val != 'YOUR_KEY_HERE':
+                            keys[key] = val
+        except Exception as e:
+            if self.verbose:
+                self.log(f"Error loading config.ini: {e}", 'warning')
+        return keys
     
     def log(self, message, level='info'):
         if not self.verbose:
@@ -1248,14 +1277,49 @@ class A1OSINT: # Renamed from ULTIMA to A1OSINT
                 })
         return results, new_nodes
     
+    def _run_ai_profile_analysis(self, job, results):
+        """Run AI analysis on profile results if AI is enabled."""
+        if not self.ai_brain:
+            return results
+        try:
+            platform = job.get('platform', job['type'])
+            ai_analysis = self.ai_brain.analyze_profile(platform, results)
+            if ai_analysis:
+                results['_ai_analysis'] = ai_analysis
+                self.log(f"AI analysis added for {platform}", 'success')
+                # Try AI entity extraction on any text content
+                text_parts = []
+                for key, val in results.items():
+                    if key.startswith('_'):
+                        continue
+                    if isinstance(val, dict):
+                        for k2, v2 in val.items():
+                            if isinstance(v2, str) and len(v2) > 20:
+                                text_parts.append(v2)
+                    elif isinstance(val, str) and len(val) > 20:
+                        text_parts.append(val)
+                if text_parts:
+                    combined_text = '\n'.join(text_parts[:5])
+                    ai_entities = self.ai_brain.extract_entities_intelligent(
+                        combined_text, f"Profile data from {platform}"
+                    )
+                    if ai_entities:
+                        results['_ai_entities'] = ai_entities
+        except Exception as e:
+            self.log(f"AI profile analysis failed: {e}", 'error')
+        return results
+
     def start(self, initial_type, initial_value):
         """Start intelligence gathering"""
         self.log(f"INITIATING: {initial_type} = '{initial_value}'", 'info')
+        if self.ai_brain:
+            self.log("AI Brain ACTIVE - intelligent analysis enabled", 'info')
         # Initialize browser if needed
         if initial_type in ['username', 'profile_url', 'person']:
             self._init_browser()
         # Add initial target with high confidence
         self.store.add_node(initial_type, initial_value, source='initial', depth=0, confidence=1.0)
+        ai_correlation = None
         try:
             while True:
                 job = self.store.get_next_job()
@@ -1281,11 +1345,26 @@ class A1OSINT: # Renamed from ULTIMA to A1OSINT
                     elif job['type'] == 'person':
                         results, new_nodes = self.hunt_person(job)
                     elif job['type'] == 'company':
-                        # Add company search logic here
                         results = {'company_name': job['value']}
                 except Exception as e:
                     self.log(f"Hunt failed: {e}", 'error')
                     results = {'error': str(e)}
+                # AI-powered analysis on results
+                if self.ai_brain and results and 'error' not in results:
+                    results = self._run_ai_profile_analysis(job, results)
+                    # AI entity extraction can discover additional nodes
+                    ai_entities = results.get('_ai_entities', [])
+                    for entity in ai_entities:
+                        etype = entity.get('type', '').lower()
+                        evalue = entity.get('value', '')
+                        if etype in ['email', 'username', 'person', 'domain', 'phone', 'social_link'] and evalue:
+                            if etype == 'social_link':
+                                etype = 'url'
+                            new_nodes.append({
+                                'type': etype,
+                                'value': evalue,
+                                'context': {'ai_discovered': True, 'ai_confidence': entity.get('confidence', 'MEDIUM')}
+                            })
                 # Mark processed
                 self.store.mark_processed(f"{job['type']}:{job['value']}", results)
                 # Add new nodes
@@ -1301,20 +1380,55 @@ class A1OSINT: # Renamed from ULTIMA to A1OSINT
                         context=context
                     )
                     self.store.add_connection(source_key, f"{node['type']}:{node['value']}", 'discovered')
+            # After all nodes processed - run cross-correlation
+            if self.ai_brain:
+                high_value = self.store.get_high_value_nodes()
+                if high_value:
+                    self.log("Running AI cross-correlation analysis...", 'info')
+                    ai_correlation = self.ai_brain.correlate_findings(high_value)
         finally:
             self._quit_browser()
-        return self.store.get_high_value_nodes(), self.store.get_statistics()
+        return self.store.get_high_value_nodes(), self.store.get_statistics(), ai_correlation
+
+def format_ai_report(ai_report_text):
+    """Format AI-generated report for terminal display."""
+    output = []
+    output.append(f"{Colors.BOLD}{Colors.HEADER}{'-'*70}{Colors.ENDC}")
+    output.append(f"{Colors.BOLD}{Colors.HEADER}{'AI INTELLIGENCE REPORT':^70}{Colors.ENDC}")
+    output.append(f"{Colors.BOLD}{Colors.HEADER}{'-'*70}{Colors.ENDC}\n")
+    # Process markdown-style headers and format for terminal
+    for line in ai_report_text.split('\n'):
+        stripped = line.strip()
+        if stripped.startswith('## '):
+            output.append(f"\n{Colors.BOLD}{Colors.OKCYAN}{stripped[3:]}{Colors.ENDC}")
+            output.append(f"{Colors.DIM}{' '*70}{Colors.ENDC}")
+        elif stripped.startswith('# '):
+            output.append(f"\n{Colors.BOLD}{Colors.HEADER}{stripped[2:]}{Colors.ENDC}")
+        elif '[HIGH]' in stripped:
+            output.append(f"  {Colors.OKGREEN}{stripped}{Colors.ENDC}")
+        elif '[LOW]' in stripped:
+            output.append(f"  {Colors.DIM}{stripped}{Colors.ENDC}")
+        elif '[WARNING]' in stripped or '[RISK]' in stripped:
+            output.append(f"  {Colors.FAIL}{stripped}{Colors.ENDC}")
+        elif stripped.startswith('- ') or stripped.startswith('* '):
+            output.append(f"  {Colors.OKBLUE}-{Colors.ENDC} {stripped[2:]}")
+        elif stripped:
+            output.append(f"  {stripped}")
+    output.append(f"\n{Colors.BOLD}{Colors.HEADER}{'-'*70}{Colors.ENDC}")
+    output.append(f"{Colors.DIM}AI Report generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{Colors.ENDC}")
+    output.append(f"{Colors.BOLD}{Colors.HEADER}{'-'*70}{Colors.ENDC}\n")
+    return '\n'.join(output)
 
 def format_professional_report(nodes, statistics):
     """Generate professional intelligence report"""
     output = []
     # Header
-    output.append(f"{Colors.BOLD}{Colors.HEADER}{'═'*70}{Colors.ENDC}")
+    output.append(f"{Colors.BOLD}{Colors.HEADER}{'-'*70}{Colors.ENDC}")
     output.append(f"{Colors.BOLD}{Colors.HEADER}{'INTELLIGENCE REPORT':^70}{Colors.ENDC}")
-    output.append(f"{Colors.BOLD}{Colors.HEADER}{'═'*70}{Colors.ENDC}\n")
+    output.append(f"{Colors.BOLD}{Colors.HEADER}{'-'*70}{Colors.ENDC}\n")
     # Executive Summary
     output.append(f"{Colors.BOLD}EXECUTIVE SUMMARY{Colors.ENDC}")
-    output.append(f"{Colors.DIM}{'─'*70}{Colors.ENDC}")
+    output.append(f"{Colors.DIM}{' '*70}{Colors.ENDC}")
     output.append(f"Total Intelligence Nodes: {statistics['total_discovered']}")
     output.append(f"High-Confidence Targets: {statistics['high_confidence_targets']}")
     output.append(f"Processed Nodes: {statistics['processed']}")
@@ -1323,11 +1437,11 @@ def format_professional_report(nodes, statistics):
     if statistics['nodes_by_type']:
         output.append(f"\n{Colors.BOLD}Intelligence by Type:{Colors.ENDC}")
         for ntype, count in sorted(statistics['nodes_by_type'].items()):
-            output.append(f"  • {ntype.title()}: {count}")
-    output.append(f"\n{Colors.BOLD}{'═'*70}{Colors.ENDC}\n")
+            output.append(f"  - {ntype.title()}: {count}")
+    output.append(f"\n{Colors.BOLD}{'-'*70}{Colors.ENDC}\n")
     # Detailed Findings
     output.append(f"{Colors.BOLD}DETAILED FINDINGS{Colors.ENDC}")
-    output.append(f"{Colors.DIM}{'─'*70}{Colors.ENDC}\n")
+    output.append(f"{Colors.DIM}{' '*70}{Colors.ENDC}\n")
     # Group by type
     by_type = {}
     for key, node in nodes.items():
@@ -1339,7 +1453,7 @@ def format_professional_report(nodes, statistics):
     for ntype in sorted(by_type.keys()):
         nodes_list = by_type[ntype]
         output.append(f"{Colors.OKCYAN}{Colors.BOLD}[{ntype.upper()}] {len(nodes_list)} Found{Colors.ENDC}")
-        output.append(f"{Colors.DIM}{'─'*70}{Colors.ENDC}")
+        output.append(f"{Colors.DIM}{' '*70}{Colors.ENDC}")
         for node in sorted(nodes_list, key=lambda x: x['confidence'], reverse=True):
             confidence_color = Colors.OKGREEN if node['confidence'] > 0.7 else Colors.WARNING if node['confidence'] > 0.5 else Colors.FAIL
             output.append(f"\n  {Colors.BOLD}{node['value']}{Colors.ENDC} {confidence_color}[{node['confidence']:.0%}]{Colors.ENDC}")
@@ -1362,7 +1476,7 @@ def format_professional_report(nodes, statistics):
                     if platforms:
                         output.append(f"  {Colors.OKGREEN}Found on {len(platforms)} platforms:{Colors.ENDC}")
                         for platform in platforms[:5]:
-                            output.append(f"    • {platform['platform']}")
+                            output.append(f"    - {platform['platform']}")
                 # Profile results
                 elif ntype == 'profile_url':
                     # GitHub
@@ -1506,9 +1620,9 @@ def format_professional_report(nodes, statistics):
                         output.append(f"  Username Variants: {', '.join(results['username_variants'][:3])}")
         output.append("")
     # Footer
-    output.append(f"{Colors.BOLD}{Colors.HEADER}{'═'*70}{Colors.ENDC}")
+    output.append(f"{Colors.BOLD}{Colors.HEADER}{'-'*70}{Colors.ENDC}")
     output.append(f"{Colors.DIM}Report generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{Colors.ENDC}")
-    output.append(f"{Colors.BOLD}{Colors.HEADER}{'═'*70}{Colors.ENDC}\n")
+    output.append(f"{Colors.BOLD}{Colors.HEADER}{'-'*70}{Colors.ENDC}\n")
     return '\n'.join(output)
 
 def get_consent(no_consent_flag):
@@ -1545,11 +1659,11 @@ Examples:
   python osint.py domain example.com -D 2
   
 Features:
-  • Intelligent relevance filtering (no noise)
-  • Confidence scoring for all findings
-  • Built-in data libraries (breach DB, IP reputation)
-  • Professional report formatting
-  • High-value target prioritization
+  - Intelligent relevance filtering (no noise)
+  - Confidence scoring for all findings
+  - Built-in data libraries (breach DB, IP reputation)
+  - Professional report formatting
+  - High-value target prioritization
 """
     )
     # DEBUG: Before argparse.ArgumentParser
@@ -1566,6 +1680,9 @@ Features:
                         help='Browser for deep analysis')
     parser.add_argument('--no-banner', action='store_true', help='Hide banner')
     parser.add_argument('--no-consent', action='store_true', help='Skip consent prompt')
+    parser.add_argument('--ai', nargs='?', const='auto', default=None,
+                        choices=['auto', 'gemini', 'ollama'],
+                        help='Enable AI analysis. Options: auto (default, tries Gemini then Ollama), gemini (cloud, needs API key), ollama (local, no key needed)')
     
     args = parser.parse_args()
     
@@ -1591,33 +1708,50 @@ Features:
         verbose=args.verbose,
         max_depth=args.depth,
         proxy=args.proxy,
-        browser=args.browser
+        browser=args.browser,
+        use_ai=bool(args.ai),
+        ai_backend=args.ai or 'auto'
     )
     # DEBUG: After A1OSINT initialization
     
     try:
         # DEBUG: Before hunter.start()
         # Corrected static method call to instance method call
-        nodes, statistics = hunter.start(args.type, args.value)
-        # DEBUG: After hunter.start()
+        nodes, statistics, ai_correlation = hunter.start(args.type, args.value)
         
-        # DEBUG: Before format_professional_report()
-        # Display report
-        report = format_professional_report(nodes, statistics)
-        # DEBUG: After format_professional_report()
+        # Generate AI report if available
+        ai_report_text = None
+        if args.ai and hunter.ai_brain:
+            print(f"\n{Colors.OKCYAN}Generating AI intelligence report...{Colors.ENDC}\n")
+            ai_report_text = hunter.ai_brain.generate_intelligence_report(
+                nodes, statistics, ai_correlation
+            )
         
-        # DEBUG: Before print(report)
+        # Display AI report if generated, otherwise standard report
+        if ai_report_text:
+            report = format_ai_report(ai_report_text)
+        else:
+            report = format_professional_report(nodes, statistics)
         print(report)
-        # DEBUG: After printing report
+        
+        # Print cross-correlation separately if we have it and used standard report
+        if ai_correlation and not ai_report_text:
+            print(f"\n{Colors.BOLD}{Colors.OKCYAN}AI CROSS-CORRELATION ANALYSIS{Colors.ENDC}")
+            print(f"{Colors.DIM}{' '*70}{Colors.ENDC}")
+            print(ai_correlation)
+            print(f"{Colors.DIM}{' '*70}{Colors.ENDC}\n")
         
         # Save if requested
         if args.output:
-            # DEBUG: Before saving output
             full_data = {
                 'nodes': {k: v for k, v in nodes.items()},
                 'statistics': statistics,
                 'generated': datetime.now().isoformat()
             }
+            if ai_report_text:
+                full_data['ai_report'] = ai_report_text
+            if ai_correlation:
+                full_data['ai_correlation'] = ai_correlation
             with open(args.output, 'w') as f:
                 json.dump(full_data, f, indent=2, default=str)
             print(f"{Colors.OKGREEN}Intelligence report saved: {args.output}{Colors.ENDC}")
