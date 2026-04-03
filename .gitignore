@@ -1,6 +1,0 @@
-__pycache__/
-.ai_cache/
-*.pyc
-*.pyo
-venv/
-.DS_Store
